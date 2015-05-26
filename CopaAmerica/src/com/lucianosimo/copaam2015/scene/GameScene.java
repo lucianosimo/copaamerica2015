@@ -9,7 +9,9 @@ import org.andengine.entity.scene.Scene;
 import org.andengine.entity.scene.background.AutoParallaxBackground;
 import org.andengine.entity.scene.background.ParallaxBackground.ParallaxEntity;
 import org.andengine.entity.sprite.Sprite;
+import org.andengine.extension.physics.box2d.FixedStepPhysicsWorld;
 import org.andengine.extension.physics.box2d.PhysicsWorld;
+import org.andengine.extension.physics.box2d.util.constants.PhysicsConstants;
 import org.andengine.input.touch.TouchEvent;
 import org.andengine.opengl.texture.region.ITextureRegion;
 import org.andengine.util.debug.Debug;
@@ -17,6 +19,7 @@ import org.andengine.util.debug.Debug;
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
 
+import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.Body;
 import com.badlogic.gdx.physics.box2d.Contact;
 import com.badlogic.gdx.physics.box2d.ContactImpulse;
@@ -25,6 +28,7 @@ import com.badlogic.gdx.physics.box2d.Fixture;
 import com.badlogic.gdx.physics.box2d.Manifold;
 import com.lucianosimo.copaam2015.base.BaseScene;
 import com.lucianosimo.copaam2015.manager.SceneManager.SceneType;
+import com.lucianosimo.copaam2015.object.Ball;
 
 public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	
@@ -50,6 +54,9 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	
 	//Modifiers
 	
+	//Balls
+	private Ball[] balls;
+	
 	//Booleans
 	private boolean availablePause;
 	private boolean gameStarted;
@@ -72,7 +79,7 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	
 	private final static int NUMBER_OF_BALLS = 10;
 	
-	//Y OFFSETS
+	//X OFFSETS
 	private final static int TAP_WINDOW_OFFSET_X = 0;
 	private final static int LEADERBOARD_BUTTON_OFFSET_X = 0;
 	private final static int RATE_BUTTON_OFFSET_X = 0;
@@ -85,6 +92,13 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	private final static int RATE_BUTTON_OFFSET_Y = -125;
 	private final static int FACEBOOK_BUTTON_OFFSET_Y = -500;
 	private final static int TWITTER_BUTTON_OFFSET_Y = -500;
+	
+	//BALL VARIABLES
+	private final static int BALL_MIN_X = 50;
+	private final static int BALL_MAX_X = 670;
+	private final static int BALL_MIN_SPEED = 5;
+	private final static int BALL_MAX_SPEED = 15;
+	private final static int BALL_INITIAL_Y = 1400;
 		
 	//If negative, never collides between groups, if positive yes
 	//private static final int GROUP_ENEMY = -1;
@@ -94,9 +108,10 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 		initializeVariables();
 		//createHud();
 		createBackground();
-		createMenu();
-		createBalls();
+		createPhysics();
 		//createWindows();
+		createBalls();
+		createMenu();
 		GameScene.this.setOnSceneTouchListener(this);
 		//Chartboost.cacheInterstitial(CBLocation.LOCATION_DEFAULT);
 		//checkSoundEnabledOrNo();
@@ -123,6 +138,18 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 		gameStarted = false;
 	}
 	
+	private void createHud() {
+		gameHud = new HUD();
+
+		camera.setHUD(gameHud);
+	}
+	
+	private void createBackground() {
+		background = new AutoParallaxBackground(0, 0, 0, 0);
+		background.attachParallaxEntity(new ParallaxEntity(0, new Sprite(centerX, centerY, resourcesManager.game_background_region, vbom)));
+		this.setBackground(background);
+	}
+	
 	private void createMenu() {
 		menuTapToStartWindow = new Sprite(centerX + TAP_WINDOW_OFFSET_X, centerY + TAP_WINDOW_OFFSET_Y, resourcesManager.menu_tap_window_region, vbom) {
 			@Override
@@ -134,6 +161,7 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 				menuRateButton.setVisible(false);
 				menuFacebookButton.setVisible(false);
 				menuTwitterButton.setVisible(false);
+				setBallsSpeed();
 				return super.onAreaTouched(pSceneTouchEvent, pTouchAreaLocalX, pTouchAreaLocalY);
 			}
 		};
@@ -151,16 +179,10 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 		GameScene.this.attachChild(menuTwitterButton);
 	}
 	
-	private void createHud() {
-		gameHud = new HUD();
-
-		camera.setHUD(gameHud);
-	}
-	
-	private void createBackground() {
-		background = new AutoParallaxBackground(0, 0, 0, 0);
-		background.attachParallaxEntity(new ParallaxEntity(0, new Sprite(centerX, centerY, resourcesManager.game_background_region, vbom)));
-		this.setBackground(background);
+	private void createPhysics() {
+		physicsWorld = new FixedStepPhysicsWorld(60, new Vector2(0, -1), false);
+		physicsWorld.setContactListener(contactListener());
+		registerUpdateHandler(physicsWorld);
 	}
 	
 	private void createWindows() {
@@ -171,36 +193,69 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	private void createBalls() {
 		//n = rand.nextInt(max - min + 1) + min;
 		Random rand = new Random();
+		
 		ITextureRegion ballRegion;
+		float ballX = 0;
+		String userData;
+		balls = new Ball[NUMBER_OF_BALLS];
 		
 		for (int i = 0; i < NUMBER_OF_BALLS; i++) {
-			int ball = rand.nextInt(10) + 1;
+			int ball = rand.nextInt(NUMBER_OF_BALLS) + 1;
 			switch (ball) {
 			case 1:
 			case 2:
 			case 3:
 			case 4:
 				ballRegion = resourcesManager.game_ball_original_region;
+				userData = "ballOriginal";
 				break;
 			case 5:
 			case 6:
 			case 7:
 				ballRegion = resourcesManager.game_ball_bronze_region;
+				userData = "ballBronze";
 				break;
 			case 8:
 			case 9:
 				ballRegion = resourcesManager.game_ball_silver_region;
+				userData = "ballSilver";
 				break;
 			case 10:
 				ballRegion = resourcesManager.game_ball_gold_region;
+				userData = "ballGold";
 				break;
 			default:
 				ballRegion = resourcesManager.game_ball_original_region;
+				userData = "ballOriginal";
 				break;
 			}
 			
-			
+			//(max - min + 1) + min
+			ballX = rand.nextInt(BALL_MAX_X - BALL_MIN_X + 1) + BALL_MIN_X;
+			balls[i] = new Ball(ballX, BALL_INITIAL_Y, vbom, camera, physicsWorld, ballRegion) {
+				@Override
+				protected void onManagedUpdate(float pSecondsElapsed) {
+					super.onManagedUpdate(pSecondsElapsed);
+					if (this.getY() < -75) {
+						this.getBallBody().setTransform(this.getX() / PhysicsConstants.PIXEL_TO_METER_RATIO_DEFAULT, BALL_INITIAL_Y / PhysicsConstants.PIXEL_TO_METER_RATIO_DEFAULT, this.getBallBody().getAngle());
+						this.setPosition(this.getX(), BALL_INITIAL_Y);
+					}
+				}
+			};
+			balls[i].setBallUserData(userData);
+			GameScene.this.attachChild(balls[i]);
 		}
+	}
+	
+	private void setBallsSpeed() {
+		//n = rand.nextInt(max - min + 1) + min;
+		Random rand = new Random();
+		int speed = 0;
+		for (int i = 0; i < NUMBER_OF_BALLS; i++) {
+			speed = rand.nextInt(BALL_MAX_SPEED - BALL_MIN_SPEED + 1) + BALL_MIN_X;
+			balls[i].setBallFallingSpeed(speed);
+		}
+		
 	}
 	
 	
