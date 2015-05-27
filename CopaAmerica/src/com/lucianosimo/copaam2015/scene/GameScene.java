@@ -4,10 +4,12 @@ import java.util.Iterator;
 import java.util.Random;
 
 import org.andengine.engine.camera.hud.HUD;
+import org.andengine.engine.handler.IUpdateHandler;
 import org.andengine.entity.scene.IOnSceneTouchListener;
 import org.andengine.entity.scene.Scene;
 import org.andengine.entity.scene.background.AutoParallaxBackground;
 import org.andengine.entity.scene.background.ParallaxBackground.ParallaxEntity;
+import org.andengine.entity.sprite.AnimatedSprite;
 import org.andengine.entity.sprite.Sprite;
 import org.andengine.extension.physics.box2d.FixedStepPhysicsWorld;
 import org.andengine.extension.physics.box2d.PhysicsWorld;
@@ -78,6 +80,7 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	//CONSTANTS
 	
 	private final static int NUMBER_OF_BALLS = 10;
+	private final static int TAP_FRAME_DURATION = 35;
 	
 	//X OFFSETS
 	private final static int TAP_WINDOW_OFFSET_X = 0;
@@ -241,10 +244,57 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 						this.setPosition(this.getX(), BALL_INITIAL_Y);
 					}
 				}
+				@Override
+				public boolean onAreaTouched(TouchEvent pSceneTouchEvent, float pTouchAreaLocalX, float pTouchAreaLocalY) {
+					if (pSceneTouchEvent.isActionDown()) {
+						createTapAnimation(this.getX(), this.getY());					
+						this.getBallBody().setTransform(this.getX() / PhysicsConstants.PIXEL_TO_METER_RATIO_DEFAULT, BALL_INITIAL_Y / PhysicsConstants.PIXEL_TO_METER_RATIO_DEFAULT, this.getBallBody().getAngle());
+						this.setPosition(this.getX(), BALL_INITIAL_Y);
+						setTouchAreaBindingOnActionDownEnabled(false);
+						setTouchAreaBindingOnActionMoveEnabled(false);
+					}
+					//true: touch listener stops processing the remaining touch events
+					return true;
+				}
 			};
 			balls[i].setBallUserData(userData);
+			balls[i].setCullingEnabled(true);
+			GameScene.this.registerTouchArea(balls[i]);
 			GameScene.this.attachChild(balls[i]);
 		}
+	}
+	
+	private void createTapAnimation(float x, float y) {
+		final AnimatedSprite tapAnimation = new AnimatedSprite(x, y, resourcesManager.game_tap_animation_region, vbom);
+		final long[] TAP_ANIMATE = new long[] {TAP_FRAME_DURATION, TAP_FRAME_DURATION, TAP_FRAME_DURATION, TAP_FRAME_DURATION, TAP_FRAME_DURATION};
+		tapAnimation.animate(TAP_ANIMATE, 0, 4, false);
+		tapAnimation.registerUpdateHandler(new IUpdateHandler() {
+			final AnimatedSprite tapRef = tapAnimation;
+			
+			@Override
+			public void reset() {
+				
+			}
+			
+			@Override
+			public void onUpdate(float pSecondsElapsed) {
+				final IUpdateHandler upd = this;
+				engine.runOnUpdateThread(new Runnable() {
+					
+					@Override
+					public void run() {
+						if (!tapRef.isAnimationRunning()) {
+							tapRef.setVisible(false);
+							tapRef.unregisterUpdateHandler(upd);
+							tapRef.setIgnoreUpdate(true);
+						}						
+					}
+				});
+				
+			}
+		});
+		GameScene.this.attachChild(tapAnimation);
+		tapAnimation.setCullingEnabled(true);
 	}
 	
 	private void setBallsSpeed() {
