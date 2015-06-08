@@ -8,7 +8,6 @@ import org.andengine.engine.handler.IUpdateHandler;
 import org.andengine.entity.IEntity;
 import org.andengine.entity.modifier.DelayModifier;
 import org.andengine.entity.modifier.IEntityModifier.IEntityModifierListener;
-import org.andengine.entity.modifier.LoopEntityModifier;
 import org.andengine.entity.primitive.Rectangle;
 import org.andengine.entity.scene.IOnSceneTouchListener;
 import org.andengine.entity.scene.Scene;
@@ -56,6 +55,13 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	//HUD
 	private Text timerText;
 	private Text scoreText;
+	private Sprite gameClock;
+	
+	//Modifiers
+	private DelayModifier goWindowModifier;
+	private DelayModifier gameDurationModifier;
+	private DelayModifier rushDurationModifier;
+	private DelayModifier gameOverWindowModifier;
 	
 	//Constants	
 	private float screenWidth;
@@ -65,9 +71,6 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	
 	//Parallax entity
 	private AutoParallaxBackground background;
-	
-	//Modifiers
-	private LoopEntityModifier desappearModifier;
 	
 	//Balls
 	private Ball[] balls;
@@ -81,11 +84,6 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	private boolean gameFinished;
 	
 	//Sprites
-	private Sprite gameOverWindow;
-	private Sprite resumeButton;
-	private Sprite retryButton;
-	private Sprite quitButton;
-	
 	private Sprite menuTapToStartWindow;
 	private Sprite menuLeaderboardButton;
 	private Sprite menuRateButton;
@@ -93,12 +91,19 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	
 	//Windows
 	private Sprite goWindow;
+	private Sprite gameOverWindow;
+	private Sprite gameRushWindow;
 
 	//Counters
 	private int score;
+	private int secondsElapsed;
+	private int updates;
 
 	//CONSTANTS
 	private final static int GAME_DURATION = 45;
+	private final static float GO_WINDOW_DURATION = 2f;
+	private final static float RUSH_WINDOW_DURATION = 1.5f;
+	private final static float GAME_OVER_WINDOW_DURATION = 7f;
 	
 	private final static int NUMBER_OF_BALLS = 10;
 	private final static int TAP_FRAME_DURATION = 35;
@@ -108,16 +113,24 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	private final static int GO_WINDOW_X = 360;
 	private final static int GO_WINDOW_Y = 750;
 	
+	private final static int GAME_OVER_WINDOW_X = 360;
+	private final static int GAME_OVER_WINDOW_Y = 640;
+	
+	private final static int RUSH_WINDOW_X = 360;
+	private final static int RUSH_WINDOW_Y = 640;
+	
 	private final static int BALL_ORIGINAL_SCORE = 2;
 	private final static int BALL_BRONZE_SCORE = 4;
 	private final static int BALL_SILVER_SCORE = 6;
 	private final static int BALL_GOLD_SCORE = 8;
 	
 	//HUD
-	private final static int TIMER_TEXT_X = 75;
+	private final static int TIMER_TEXT_X = 125;
 	private final static int TIMER_TEXT_Y = 1200;
-	private final static int SCORE_TEXT_X = 570;
+	private final static int SCORE_TEXT_X = 525;
 	private final static int SCORE_TEXT_Y = 1200;
+	private final static int CLOCK_X = 55;
+	private final static int CLOCK_Y = 1205;
 	
 	//X OFFSETS
 	private final static int TAP_WINDOW_OFFSET_X = 0;
@@ -128,7 +141,6 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	private final static int TAP_WINDOW_OFFSET_Y = 300;
 	private final static int LEADERBOARD_BUTTON_OFFSET_Y = 25;
 	private final static int RATE_BUTTON_OFFSET_Y = -125;
-	private final static int FACEBOOK_BUTTON_OFFSET_Y = -500;
 	private final static int TWITTER_BUTTON_OFFSET_Y = -500;
 	
 	//BALL VARIABLES
@@ -152,7 +164,6 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 		createBackground();
 		createPhysics();
 		createWindows();
-		createBalls();
 		createMenu();
 		createBottomLimit();
 		GameScene.this.setOnSceneTouchListener(this);
@@ -186,15 +197,18 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 		
 		timerText = new Text(TIMER_TEXT_X, TIMER_TEXT_Y, resourcesManager.timerFont, "0123456789", new TextOptions(HorizontalAlign.LEFT), vbom);
 		scoreText = new Text(SCORE_TEXT_X, SCORE_TEXT_Y, resourcesManager.scoreFont, "Score: 0123456789", new TextOptions(HorizontalAlign.LEFT), vbom);
+		gameClock = new Sprite(CLOCK_X, CLOCK_Y, resourcesManager.game_clock_region, vbom);
 		
 		timerText.setText("" + GAME_DURATION);
 		scoreText.setText("Score: " + score);
 		
 		timerText.setVisible(false);
 		scoreText.setVisible(false);
+		gameClock.setVisible(false);
 		
 		gameHud.attachChild(timerText);
 		gameHud.attachChild(scoreText);
+		gameHud.attachChild(gameClock);
 
 		camera.setHUD(gameHud);
 	}
@@ -211,15 +225,13 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 			public boolean onAreaTouched(TouchEvent pSceneTouchEvent, float pTouchAreaLocalX, float pTouchAreaLocalY) {
 				gameStarted = true;
 				gameFinished = false;
-				timerText.setVisible(true);
-				scoreText.setVisible(true);
 				initTimer();
-				GameScene.this.unregisterTouchArea(menuTapToStartWindow);
-				menuTapToStartWindow.setVisible(false);
-				menuLeaderboardButton.setVisible(false);
-				menuRateButton.setVisible(false);
-				menuTwitterButton.setVisible(false);
-				return super.onAreaTouched(pSceneTouchEvent, pTouchAreaLocalX, pTouchAreaLocalY);
+				toggleHudElementsVisibility(true);
+				toggleMenuButtonsVisibility(false);	
+				createBalls();
+				setTouchAreaBindingOnActionDownEnabled(false);
+				setTouchAreaBindingOnActionMoveEnabled(false);
+				return true;
 			}
 		};
 		menuLeaderboardButton = new Sprite(centerX + LEADERBOARD_BUTTON_OFFSET_X, centerY + LEADERBOARD_BUTTON_OFFSET_Y, resourcesManager.menu_button_leaderboard_region, vbom);
@@ -227,11 +239,38 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 		menuTwitterButton = new Sprite(centerX, centerY + TWITTER_BUTTON_OFFSET_Y, resourcesManager.menu_button_tw_region, vbom);
 		
 		GameScene.this.registerTouchArea(menuTapToStartWindow);
+		GameScene.this.registerTouchArea(menuLeaderboardButton);
+		GameScene.this.registerTouchArea(menuRateButton);
+		GameScene.this.registerTouchArea(menuTwitterButton);
 		
 		GameScene.this.attachChild(menuTapToStartWindow);
 		GameScene.this.attachChild(menuLeaderboardButton);
 		GameScene.this.attachChild(menuRateButton);
 		GameScene.this.attachChild(menuTwitterButton);
+	}
+	
+	private void toggleHudElementsVisibility(boolean display) {
+		timerText.setVisible(display);
+		scoreText.setVisible(display);
+		gameClock.setVisible(display);
+	}
+	
+	private void toggleMenuButtonsVisibility(boolean display) {
+		menuTapToStartWindow.setVisible(display);
+		menuLeaderboardButton.setVisible(display);
+		menuRateButton.setVisible(display);
+		menuTwitterButton.setVisible(display);
+		if (display) {
+			GameScene.this.registerTouchArea(menuTapToStartWindow);
+			GameScene.this.registerTouchArea(menuLeaderboardButton);
+			GameScene.this.registerTouchArea(menuRateButton);
+			GameScene.this.registerTouchArea(menuTwitterButton);
+		} else {
+			GameScene.this.unregisterTouchArea(menuTapToStartWindow);
+			GameScene.this.unregisterTouchArea(menuLeaderboardButton);
+			GameScene.this.unregisterTouchArea(menuRateButton);
+			GameScene.this.unregisterTouchArea(menuTwitterButton);
+		}
 	}
 	
 	private void createBottomLimit() {
@@ -243,11 +282,28 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	}
 	
 	private void initTimer() {
-		GameScene.this.registerEntityModifier(new DelayModifier(2f, new IEntityModifierListener() {
+		updates = 0;
+		secondsElapsed = 0;
+		timerText.setText("" + GAME_DURATION);
+		
+		goWindowModifier = new DelayModifier(GO_WINDOW_DURATION, new IEntityModifierListener() {
 			
 			@Override
 			public void onModifierStarted(IModifier<IEntity> pModifier, IEntity pItem) {
-				goWindow.setVisible(true);
+				goWindow.setVisible(true);				
+			}
+			
+			@Override
+			public void onModifierFinished(IModifier<IEntity> pModifier, IEntity pItem) {
+				goWindow.setVisible(false);
+				setBallsSpeed();
+				GameScene.this.registerEntityModifier(gameDurationModifier);
+			}
+		});
+		gameDurationModifier = new DelayModifier(GAME_DURATION, new IEntityModifierListener() {
+			
+			@Override
+			public void onModifierStarted(IModifier<IEntity> pModifier, IEntity pItem) {
 				engine.registerUpdateHandler(new IUpdateHandler() {
 					
 					@Override
@@ -256,51 +312,66 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 					}
 					
 					@Override
+					//pSecondsElapsed = 1/60 secs
 					public void onUpdate(float pSecondsElapsed) {
+						updates++;
+						if ((updates % 60) == 0) {
+							if (secondsElapsed < 45) {
+								secondsElapsed++;
+								timerText.setText("" + (int)(GAME_DURATION - secondsElapsed));
+							}
+							if (secondsElapsed == 20) {
+								GameScene.this.registerEntityModifier(rushDurationModifier);
+							}
+							if (secondsElapsed >= 45) {
+								engine.unregisterUpdateHandler(this);
+							}
+						}
 					}
 				});
 			}
 			
 			@Override
 			public void onModifierFinished(IModifier<IEntity> pModifier, IEntity pItem) {
-				goWindow.setVisible(false);
-				setBallsSpeed();
-				GameScene.this.registerEntityModifier(new DelayModifier(GAME_DURATION, new IEntityModifierListener() {
-					
-					@Override
-					public void onModifierStarted(IModifier<IEntity> pModifier, IEntity pItem) {
-						engine.registerUpdateHandler(new IUpdateHandler() {
-							int updates = 0;
-							int secondsElapsed = 0; 
-							
-							@Override
-							public void reset() {
-								
-							}
-							
-							@Override
-							//pSecondsElapsed = 1/60 secs
-							public void onUpdate(float pSecondsElapsed) {
-								updates++;
-								if ((updates % 60) == 0) {
-									if (secondsElapsed < 45) {
-										secondsElapsed++;
-										timerText.setText("" + (int)(GAME_DURATION - secondsElapsed));
-									}
-								}
-							}
-						});
-					}
-					
-					@Override
-					public void onModifierFinished(IModifier<IEntity> pModifier, IEntity pItem) {
-						gameFinished = true;
-					}
-				}));
+				gameFinished = true;
+				GameScene.this.registerEntityModifier(gameOverWindowModifier);
 			}
-		}));
+		});
+		gameOverWindowModifier = new DelayModifier(GAME_OVER_WINDOW_DURATION, new IEntityModifierListener() {
+			
+			@Override
+			public void onModifierStarted(IModifier<IEntity> pModifier, IEntity pItem) {
+				gameOverWindow.setVisible(true);
+			}
+			
+			@Override
+			public void onModifierFinished(IModifier<IEntity> pModifier, IEntity pItem) {
+				for (int i = 0; i < NUMBER_OF_BALLS; i++) {
+					GameScene.this.unregisterTouchArea(balls[i]);
+				}
+				gameOverWindow.setVisible(false);
+				toggleHudElementsVisibility(false);
+				toggleMenuButtonsVisibility(true);
+			}
+		});
+		rushDurationModifier = new DelayModifier(RUSH_WINDOW_DURATION, new IEntityModifierListener() {
+			
+			@Override
+			public void onModifierStarted(IModifier<IEntity> pModifier, IEntity pItem) {
+				gameRushWindow.setVisible(true);
+			}
+			
+			@Override
+			public void onModifierFinished(IModifier<IEntity> pModifier, IEntity pItem) {
+				gameRushWindow.setVisible(false);
+			}
+		});
 		
-		
+		GameScene.this.registerEntityModifier(goWindowModifier);
+		goWindowModifier.setAutoUnregisterWhenFinished(true);
+		gameOverWindowModifier.setAutoUnregisterWhenFinished(true);
+		rushDurationModifier.setAutoUnregisterWhenFinished(true);
+		gameDurationModifier.setAutoUnregisterWhenFinished(true);
 	}
 	
 	private void createPhysics() {
@@ -310,13 +381,17 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	}
 	
 	private void createWindows() {
-		gameOverWindow = new Sprite(10000, 10000, resourcesManager.game_over_window_region, vbom);
+		gameOverWindow = new Sprite(GAME_OVER_WINDOW_X, GAME_OVER_WINDOW_Y, resourcesManager.game_over_window_region, vbom);
 		goWindow = new Sprite(GO_WINDOW_X, GO_WINDOW_Y, resourcesManager.game_go_window_region, vbom);
+		gameRushWindow = new Sprite(RUSH_WINDOW_X, RUSH_WINDOW_Y, resourcesManager.game_rush_window_region, vbom);
 		
 		GameScene.this.attachChild(gameOverWindow);
 		GameScene.this.attachChild(goWindow);
+		GameScene.this.attachChild(gameRushWindow);
 		
+		gameOverWindow.setVisible(false);
 		goWindow.setVisible(false);
+		gameRushWindow.setVisible(false);
 	}
 	
 	private void createBalls() {

@@ -44,6 +44,7 @@ public class ResourcesManager {
 	public Font timerFont;
 	
 	//Game HUD
+	public ITextureRegion game_clock_region;
 	
 	//Animated
 	public ITiledTextureRegion game_tap_animation_region;
@@ -119,6 +120,9 @@ public class ResourcesManager {
 		game_ball_bronze_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(gameTextureAtlas, activity, "game_ball_bronze.png");
 		game_ball_silver_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(gameTextureAtlas, activity, "game_ball_silver.png");
 		game_ball_gold_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(gameTextureAtlas, activity, "game_ball_gold.png");
+		
+		//HUD
+		game_clock_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(gameTextureAtlas, activity, "game_clock.png");
 		
 		//ANIMATED
 		game_tap_animation_region = BitmapTextureAtlasTextureRegionFactory.createTiledFromAsset(gameAnimatedTextureAtlas, activity, "game_tap_animation.png", 5, 1);
