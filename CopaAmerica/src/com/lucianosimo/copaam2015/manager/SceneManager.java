@@ -70,12 +70,12 @@ public class SceneManager {
 	
 	
 	public void loadGameScene(final Engine mEngine) {
-		disposeSplashScene();
 		mEngine.registerUpdateHandler(new TimerHandler(0.1f, new ITimerCallback() {
 			@Override
 			public void onTimePassed(final TimerHandler pTimerHandler) {
 				mEngine.unregisterUpdateHandler(pTimerHandler);
 				ResourcesManager.getInstance().loadGameResources();
+				disposeSplashScene();
 				gameScene = new GameScene();
 				setScene(gameScene);
 			}

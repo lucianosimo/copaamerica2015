@@ -6,7 +6,9 @@ import org.andengine.audio.music.MusicFactory;
 import org.andengine.audio.sound.SoundFactory;
 import org.andengine.engine.Engine;
 import org.andengine.engine.camera.SmoothCamera;
+import org.andengine.opengl.font.Font;
 import org.andengine.opengl.font.FontFactory;
+import org.andengine.opengl.texture.ITexture;
 import org.andengine.opengl.texture.TextureOptions;
 import org.andengine.opengl.texture.atlas.bitmap.BitmapTextureAtlas;
 import org.andengine.opengl.texture.atlas.bitmap.BitmapTextureAtlasTextureRegionFactory;
@@ -17,6 +19,7 @@ import org.andengine.opengl.texture.atlas.buildable.builder.ITextureAtlasBuilder
 import org.andengine.opengl.texture.region.ITextureRegion;
 import org.andengine.opengl.texture.region.ITiledTextureRegion;
 import org.andengine.opengl.vbo.VertexBufferObjectManager;
+import org.andengine.util.adt.color.Color;
 import org.andengine.util.debug.Debug;
 
 import com.lucianosimo.copaam2015.GameActivity;
@@ -37,6 +40,8 @@ public class ResourcesManager {
 	//Game audio
 	
 	//Game fonts
+	public Font scoreFont;
+	public Font timerFont;
 	
 	//Game HUD
 	
@@ -63,7 +68,6 @@ public class ResourcesManager {
 	public ITextureRegion game_over_window_region;
 
 	//Buttons
-	public ITextureRegion menu_button_fb_region;
 	public ITextureRegion menu_button_tw_region;
 	public ITextureRegion menu_button_rate_region;
 	public ITextureRegion menu_button_leaderboard_region;
@@ -128,7 +132,6 @@ public class ResourcesManager {
 		game_over_window_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(gameTextureAtlas, activity, "game_over_window.png");
 		
 		//BUTTONS
-		menu_button_fb_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(menuTextureAtlas, activity, "menu_button_fb.png");
 		menu_button_tw_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(menuTextureAtlas, activity, "menu_button_tw.png");
 		menu_button_rate_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(menuTextureAtlas, activity, "menu_button_rate.png");
 		menu_button_leaderboard_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(menuTextureAtlas, activity, "menu_button_leaderboard.png");
@@ -182,6 +185,12 @@ public class ResourcesManager {
 	
 	private void loadGameFonts() {
 		FontFactory.setAssetBasePath("fonts/game/");
+		final ITexture scoreTexture = new BitmapTextureAtlas(activity.getTextureManager(), 256, 256, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
+		final ITexture timerTexture = new BitmapTextureAtlas(activity.getTextureManager(), 256, 256, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
+		scoreFont = FontFactory.createStrokeFromAsset(activity.getFontManager(), scoreTexture, activity.getAssets(), "myriad.ttf", 60, true, Color.WHITE_ARGB_PACKED_INT, 2f, Color.BLACK_ARGB_PACKED_INT);
+		timerFont = FontFactory.createStrokeFromAsset(activity.getFontManager(), timerTexture, activity.getAssets(), "myriad.ttf", 60, true, Color.WHITE_ARGB_PACKED_INT, 2f, Color.BLACK_ARGB_PACKED_INT);
+		scoreFont.load();
+		timerFont.load();
 	}
 	
 	private void unloadGameTextures() {

@@ -5,18 +5,28 @@ import java.util.Random;
 
 import org.andengine.engine.camera.hud.HUD;
 import org.andengine.engine.handler.IUpdateHandler;
+import org.andengine.entity.IEntity;
+import org.andengine.entity.modifier.DelayModifier;
+import org.andengine.entity.modifier.IEntityModifier.IEntityModifierListener;
+import org.andengine.entity.modifier.LoopEntityModifier;
+import org.andengine.entity.primitive.Rectangle;
 import org.andengine.entity.scene.IOnSceneTouchListener;
 import org.andengine.entity.scene.Scene;
 import org.andengine.entity.scene.background.AutoParallaxBackground;
 import org.andengine.entity.scene.background.ParallaxBackground.ParallaxEntity;
 import org.andengine.entity.sprite.AnimatedSprite;
 import org.andengine.entity.sprite.Sprite;
+import org.andengine.entity.text.Text;
+import org.andengine.entity.text.TextOptions;
 import org.andengine.extension.physics.box2d.FixedStepPhysicsWorld;
 import org.andengine.extension.physics.box2d.PhysicsWorld;
 import org.andengine.extension.physics.box2d.util.constants.PhysicsConstants;
 import org.andengine.input.touch.TouchEvent;
 import org.andengine.opengl.texture.region.ITextureRegion;
+import org.andengine.util.adt.align.HorizontalAlign;
+import org.andengine.util.adt.color.Color;
 import org.andengine.util.debug.Debug;
+import org.andengine.util.modifier.IModifier;
 
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
@@ -43,7 +53,9 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	//Physics world variable
 	private PhysicsWorld physicsWorld;
 	
-	//HUD sprites
+	//HUD
+	private Text timerText;
+	private Text scoreText;
 	
 	//Constants	
 	private float screenWidth;
@@ -55,13 +67,18 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	private AutoParallaxBackground background;
 	
 	//Modifiers
+	private LoopEntityModifier desappearModifier;
 	
 	//Balls
 	private Ball[] balls;
 	
+	//Floor
+	private Rectangle bottomLimit;
+	
 	//Booleans
 	private boolean availablePause;
 	private boolean gameStarted;
+	private boolean gameFinished;
 	
 	//Sprites
 	private Sprite gameOverWindow;
@@ -72,22 +89,40 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	private Sprite menuTapToStartWindow;
 	private Sprite menuLeaderboardButton;
 	private Sprite menuRateButton;
-	private Sprite menuFacebookButton;
 	private Sprite menuTwitterButton;
+	
+	//Windows
+	private Sprite goWindow;
 
 	//Counters
+	private int score;
 
 	//CONSTANTS
+	private final static int GAME_DURATION = 45;
 	
 	private final static int NUMBER_OF_BALLS = 10;
 	private final static int TAP_FRAME_DURATION = 35;
+
+	private final static int BOTTOM_LIMIT_Y = -75;
+	
+	private final static int GO_WINDOW_X = 360;
+	private final static int GO_WINDOW_Y = 750;
+	
+	private final static int BALL_ORIGINAL_SCORE = 2;
+	private final static int BALL_BRONZE_SCORE = 4;
+	private final static int BALL_SILVER_SCORE = 6;
+	private final static int BALL_GOLD_SCORE = 8;
+	
+	//HUD
+	private final static int TIMER_TEXT_X = 75;
+	private final static int TIMER_TEXT_Y = 1200;
+	private final static int SCORE_TEXT_X = 570;
+	private final static int SCORE_TEXT_Y = 1200;
 	
 	//X OFFSETS
 	private final static int TAP_WINDOW_OFFSET_X = 0;
 	private final static int LEADERBOARD_BUTTON_OFFSET_X = 0;
 	private final static int RATE_BUTTON_OFFSET_X = 0;
-	private final static int FACEBOOK_BUTTON_OFFSET_X = -100;
-	private final static int TWITTER_BUTTON_OFFSET_X = 100;
 	
 	//Y OFFSETS
 	private final static int TAP_WINDOW_OFFSET_Y = 300;
@@ -101,7 +136,11 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	private final static int BALL_MAX_X = 670;
 	private final static int BALL_MIN_SPEED = 5;
 	private final static int BALL_MAX_SPEED = 15;
-	private final static int BALL_INITIAL_Y = 1400;
+	private final static int BALL_REGENERATE_Y = 2000;
+	private final static int BALL_ORIGINAL_INITIAL_Y = 1400;
+	private final static int BALL_BRONZE_INITIAL_Y = 1700;
+	private final static int BALL_SILVER_INITIAL_Y = 2000;
+	private final static int BALL_GOLD_INITIAL_Y = 2300;
 		
 	//If negative, never collides between groups, if positive yes
 	//private static final int GROUP_ENEMY = -1;
@@ -109,12 +148,13 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	@Override
 	public void createScene() {
 		initializeVariables();
-		//createHud();
+		createHud();
 		createBackground();
 		createPhysics();
-		//createWindows();
+		createWindows();
 		createBalls();
 		createMenu();
+		createBottomLimit();
 		GameScene.this.setOnSceneTouchListener(this);
 		//Chartboost.cacheInterstitial(CBLocation.LOCATION_DEFAULT);
 		//checkSoundEnabledOrNo();
@@ -143,6 +183,18 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	
 	private void createHud() {
 		gameHud = new HUD();
+		
+		timerText = new Text(TIMER_TEXT_X, TIMER_TEXT_Y, resourcesManager.timerFont, "0123456789", new TextOptions(HorizontalAlign.LEFT), vbom);
+		scoreText = new Text(SCORE_TEXT_X, SCORE_TEXT_Y, resourcesManager.scoreFont, "Score: 0123456789", new TextOptions(HorizontalAlign.LEFT), vbom);
+		
+		timerText.setText("" + GAME_DURATION);
+		scoreText.setText("Score: " + score);
+		
+		timerText.setVisible(false);
+		scoreText.setVisible(false);
+		
+		gameHud.attachChild(timerText);
+		gameHud.attachChild(scoreText);
 
 		camera.setHUD(gameHud);
 	}
@@ -158,28 +210,97 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 			@Override
 			public boolean onAreaTouched(TouchEvent pSceneTouchEvent, float pTouchAreaLocalX, float pTouchAreaLocalY) {
 				gameStarted = true;
+				gameFinished = false;
+				timerText.setVisible(true);
+				scoreText.setVisible(true);
+				initTimer();
 				GameScene.this.unregisterTouchArea(menuTapToStartWindow);
 				menuTapToStartWindow.setVisible(false);
 				menuLeaderboardButton.setVisible(false);
 				menuRateButton.setVisible(false);
-				menuFacebookButton.setVisible(false);
 				menuTwitterButton.setVisible(false);
-				setBallsSpeed();
 				return super.onAreaTouched(pSceneTouchEvent, pTouchAreaLocalX, pTouchAreaLocalY);
 			}
 		};
 		menuLeaderboardButton = new Sprite(centerX + LEADERBOARD_BUTTON_OFFSET_X, centerY + LEADERBOARD_BUTTON_OFFSET_Y, resourcesManager.menu_button_leaderboard_region, vbom);
 		menuRateButton = new Sprite(centerX + RATE_BUTTON_OFFSET_X, centerY + RATE_BUTTON_OFFSET_Y, resourcesManager.menu_button_rate_region, vbom);
-		menuFacebookButton = new Sprite(centerX + FACEBOOK_BUTTON_OFFSET_X, centerY + FACEBOOK_BUTTON_OFFSET_Y, resourcesManager.menu_button_fb_region, vbom);
-		menuTwitterButton = new Sprite(centerX + TWITTER_BUTTON_OFFSET_X, centerY + TWITTER_BUTTON_OFFSET_Y, resourcesManager.menu_button_tw_region, vbom);
+		menuTwitterButton = new Sprite(centerX, centerY + TWITTER_BUTTON_OFFSET_Y, resourcesManager.menu_button_tw_region, vbom);
 		
 		GameScene.this.registerTouchArea(menuTapToStartWindow);
 		
 		GameScene.this.attachChild(menuTapToStartWindow);
 		GameScene.this.attachChild(menuLeaderboardButton);
 		GameScene.this.attachChild(menuRateButton);
-		GameScene.this.attachChild(menuFacebookButton);
 		GameScene.this.attachChild(menuTwitterButton);
+	}
+	
+	private void createBottomLimit() {
+		bottomLimit = new Rectangle(screenWidth/2, BOTTOM_LIMIT_Y, screenWidth, 1f, vbom);
+
+		bottomLimit.setColor(Color.RED);
+
+		GameScene.this.attachChild(bottomLimit);
+	}
+	
+	private void initTimer() {
+		GameScene.this.registerEntityModifier(new DelayModifier(2f, new IEntityModifierListener() {
+			
+			@Override
+			public void onModifierStarted(IModifier<IEntity> pModifier, IEntity pItem) {
+				goWindow.setVisible(true);
+				engine.registerUpdateHandler(new IUpdateHandler() {
+					
+					@Override
+					public void reset() {
+						
+					}
+					
+					@Override
+					public void onUpdate(float pSecondsElapsed) {
+					}
+				});
+			}
+			
+			@Override
+			public void onModifierFinished(IModifier<IEntity> pModifier, IEntity pItem) {
+				goWindow.setVisible(false);
+				setBallsSpeed();
+				GameScene.this.registerEntityModifier(new DelayModifier(GAME_DURATION, new IEntityModifierListener() {
+					
+					@Override
+					public void onModifierStarted(IModifier<IEntity> pModifier, IEntity pItem) {
+						engine.registerUpdateHandler(new IUpdateHandler() {
+							int updates = 0;
+							int secondsElapsed = 0; 
+							
+							@Override
+							public void reset() {
+								
+							}
+							
+							@Override
+							//pSecondsElapsed = 1/60 secs
+							public void onUpdate(float pSecondsElapsed) {
+								updates++;
+								if ((updates % 60) == 0) {
+									if (secondsElapsed < 45) {
+										secondsElapsed++;
+										timerText.setText("" + (int)(GAME_DURATION - secondsElapsed));
+									}
+								}
+							}
+						});
+					}
+					
+					@Override
+					public void onModifierFinished(IModifier<IEntity> pModifier, IEntity pItem) {
+						gameFinished = true;
+					}
+				}));
+			}
+		}));
+		
+		
 	}
 	
 	private void createPhysics() {
@@ -190,7 +311,12 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 	
 	private void createWindows() {
 		gameOverWindow = new Sprite(10000, 10000, resourcesManager.game_over_window_region, vbom);
+		goWindow = new Sprite(GO_WINDOW_X, GO_WINDOW_Y, resourcesManager.game_go_window_region, vbom);
+		
 		GameScene.this.attachChild(gameOverWindow);
+		GameScene.this.attachChild(goWindow);
+		
+		goWindow.setVisible(false);
 	}
 	
 	private void createBalls() {
@@ -199,57 +325,111 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 		
 		ITextureRegion ballRegion;
 		float ballX = 0;
+		int initialY = 0;
+		
 		String userData;
 		balls = new Ball[NUMBER_OF_BALLS];
 		
 		for (int i = 0; i < NUMBER_OF_BALLS; i++) {
-			int ball = rand.nextInt(NUMBER_OF_BALLS) + 1;
-			switch (ball) {
+			//int ball = rand.nextInt(NUMBER_OF_BALLS) + 1;
+			switch (i) {
+			case 0:
 			case 1:
 			case 2:
 			case 3:
-			case 4:
 				ballRegion = resourcesManager.game_ball_original_region;
 				userData = "ballOriginal";
+				initialY = BALL_ORIGINAL_INITIAL_Y;
 				break;
+			case 4:
 			case 5:
 			case 6:
-			case 7:
 				ballRegion = resourcesManager.game_ball_bronze_region;
 				userData = "ballBronze";
+				initialY = BALL_BRONZE_INITIAL_Y;
 				break;
+			case 7:
 			case 8:
-			case 9:
 				ballRegion = resourcesManager.game_ball_silver_region;
 				userData = "ballSilver";
+				initialY = BALL_SILVER_INITIAL_Y;
 				break;
-			case 10:
+			case 9:
 				ballRegion = resourcesManager.game_ball_gold_region;
 				userData = "ballGold";
+				initialY = BALL_GOLD_INITIAL_Y;
 				break;
 			default:
 				ballRegion = resourcesManager.game_ball_original_region;
 				userData = "ballOriginal";
+				initialY = BALL_ORIGINAL_INITIAL_Y;
 				break;
 			}
 			
 			//(max - min + 1) + min
 			ballX = rand.nextInt(BALL_MAX_X - BALL_MIN_X + 1) + BALL_MIN_X;
-			balls[i] = new Ball(ballX, BALL_INITIAL_Y, vbom, camera, physicsWorld, ballRegion) {
+			balls[i] = new Ball(ballX, initialY + i * 100, vbom, camera, physicsWorld, ballRegion) {
 				@Override
 				protected void onManagedUpdate(float pSecondsElapsed) {
 					super.onManagedUpdate(pSecondsElapsed);
-					if (this.getY() < -75) {
-						this.getBallBody().setTransform(this.getX() / PhysicsConstants.PIXEL_TO_METER_RATIO_DEFAULT, BALL_INITIAL_Y / PhysicsConstants.PIXEL_TO_METER_RATIO_DEFAULT, this.getBallBody().getAngle());
-						this.setPosition(this.getX(), BALL_INITIAL_Y);
+					
+					if (this.collidesWith(bottomLimit)) {
+						String userData = this.getUserData().toString();
+						switch (userData) {
+						case "ballOriginal":
+							reduceScore(BALL_ORIGINAL_SCORE/2);
+							break;
+						case "ballBronze":
+							reduceScore(BALL_BRONZE_SCORE/2);
+							break;
+						case "ballSilver":
+							reduceScore(BALL_SILVER_SCORE/2);
+							break;
+						case "ballGold":
+							reduceScore(BALL_GOLD_SCORE/2);
+							break;
+						default:
+							reduceScore(BALL_ORIGINAL_SCORE/2);
+							break;
+						}
+						if (!gameFinished) {
+							regenerateBall(this);
+						}
+						if (gameFinished && this.collidesWith(bottomLimit)) {
+							this.getBallBody().setTransform(5000 / PhysicsConstants.PIXEL_TO_METER_RATIO_DEFAULT, 5000 / PhysicsConstants.PIXEL_TO_METER_RATIO_DEFAULT, this.getBallBody().getAngle());
+							this.setPosition(5000, 5000);
+						}
 					}
+					
 				}
 				@Override
 				public boolean onAreaTouched(TouchEvent pSceneTouchEvent, float pTouchAreaLocalX, float pTouchAreaLocalY) {
 					if (pSceneTouchEvent.isActionDown()) {
-						createTapAnimation(this.getX(), this.getY());					
-						this.getBallBody().setTransform(this.getX() / PhysicsConstants.PIXEL_TO_METER_RATIO_DEFAULT, BALL_INITIAL_Y / PhysicsConstants.PIXEL_TO_METER_RATIO_DEFAULT, this.getBallBody().getAngle());
-						this.setPosition(this.getX(), BALL_INITIAL_Y);
+						
+						String userData = this.getUserData().toString();
+						switch (userData) {
+						case "ballOriginal":
+							addScore(BALL_ORIGINAL_SCORE);
+							break;
+						case "ballBronze":
+							addScore(BALL_BRONZE_SCORE);
+							break;
+						case "ballSilver":
+							addScore(BALL_SILVER_SCORE);
+							break;
+						case "ballGold":
+							addScore(BALL_GOLD_SCORE);
+							break;
+						default:
+							addScore(BALL_ORIGINAL_SCORE);
+							break;
+						}
+						
+						if (!gameFinished) {
+							createTapAnimation(this.getX(), this.getY());
+							regenerateBall(this);
+						}						
+						
 						setTouchAreaBindingOnActionDownEnabled(false);
 						setTouchAreaBindingOnActionMoveEnabled(false);
 					}
@@ -261,6 +441,27 @@ public class GameScene extends BaseScene implements IOnSceneTouchListener{
 			balls[i].setCullingEnabled(true);
 			GameScene.this.registerTouchArea(balls[i]);
 			GameScene.this.attachChild(balls[i]);
+		}
+	}
+	
+	private void regenerateBall(Ball ball) {
+		ball.getBallBody().setTransform(ball.getX() / PhysicsConstants.PIXEL_TO_METER_RATIO_DEFAULT, BALL_REGENERATE_Y / PhysicsConstants.PIXEL_TO_METER_RATIO_DEFAULT, ball.getBallBody().getAngle());
+		ball.setPosition(ball.getX(), BALL_REGENERATE_Y);
+	}
+	
+	private void addScore(int localScore) {
+		score += localScore;
+		scoreText.setText("Score: " + score);
+	}
+	
+	private void reduceScore(int localScore) {
+		if (score > 0 && score > localScore) {
+			score -= localScore;
+			scoreText.setText("Score: " + score);
+		}
+		if (score > 0 && score <= localScore) {
+			score = 0;
+			scoreText.setText("Score: " + score);
 		}
 	}
 	

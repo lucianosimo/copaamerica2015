@@ -21,8 +21,8 @@ public class Ball extends Sprite{
 
 	private Body body;
 	private FixtureDef fixture;
-	private final static int OMEGA_MAX = 5;
-	private final static int OMEGA_MIN = 2;
+	private final static int OMEGA_MAX = 9;
+	private final static int OMEGA_MIN = 4;
 	
 	public Ball(float pX, float pY, VertexBufferObjectManager vbom, Camera camera, PhysicsWorld physicsWorld, ITextureRegion texture) {
 		super(pX, pY, texture, vbom);
