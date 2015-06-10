@@ -63,7 +63,7 @@ public class Ball extends Sprite{
 	}
 	
 	public void setBallFallingSpeed(float speed) {
-		body.setLinearVelocity(new Vector2(0, -speed/5));
+		body.setLinearVelocity(new Vector2(0, -speed));
 	}
 
 }

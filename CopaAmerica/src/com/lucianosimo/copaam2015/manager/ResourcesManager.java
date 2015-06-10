@@ -1,8 +1,11 @@
 package com.lucianosimo.copaam2015.manager;
 
+import java.io.IOException;
 import java.util.Random;
 
+import org.andengine.audio.music.Music;
 import org.andengine.audio.music.MusicFactory;
+import org.andengine.audio.sound.Sound;
 import org.andengine.audio.sound.SoundFactory;
 import org.andengine.engine.Engine;
 import org.andengine.engine.camera.SmoothCamera;
@@ -38,13 +41,19 @@ public class ResourcesManager {
 	private BitmapTextureAtlas splashTextureAtlas;
 	
 	//Game audio
+	public Music game_background_sound;
+	public Sound game_ball_tap;
+	public Sound game_referee_whistle;
+	public Sound game_rush_whistle;
 	
 	//Game fonts
 	public Font scoreFont;
 	public Font timerFont;
+	public Font highScoreFont;
 	
 	//Game HUD
 	public ITextureRegion game_clock_region;
+	public ITextureRegion menu_best_score_window_region;
 	
 	//Animated
 	public ITiledTextureRegion game_tap_animation_region;
@@ -61,12 +70,11 @@ public class ResourcesManager {
 	public ITextureRegion game_background_region;
 
 	//Windows
-	public ITextureRegion menu_tap_window_region;
-	public ITextureRegion menu_best_score_window_region;
+	public ITextureRegion menu_tap_window_region;	
 	public ITextureRegion game_go_window_region;
 	public ITextureRegion game_high_score_window_region;
 	public ITextureRegion game_rush_window_region;
-	public ITextureRegion game_over_window_region;
+	public ITextureRegion game_pause_window_region;
 
 	//Buttons
 	public ITextureRegion menu_button_tw_region;
@@ -123,17 +131,17 @@ public class ResourcesManager {
 		
 		//HUD
 		game_clock_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(gameTextureAtlas, activity, "game_clock.png");
+		menu_best_score_window_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(menuTextureAtlas, activity, "menu_best_score_window.png");
 		
 		//ANIMATED
 		game_tap_animation_region = BitmapTextureAtlasTextureRegionFactory.createTiledFromAsset(gameAnimatedTextureAtlas, activity, "game_tap_animation.png", 5, 1);
 		
 		//WINDOWS
 		menu_tap_window_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(menuTextureAtlas, activity, "menu_tap_window.png");
-		menu_best_score_window_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(menuTextureAtlas, activity, "menu_best_score_window.png");
 		game_go_window_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(gameTextureAtlas, activity, "game_go_window.png");
 		game_high_score_window_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(gameTextureAtlas, activity, "game_high_score_window.png");
 		game_rush_window_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(gameTextureAtlas, activity, "game_rush_window.png");
-		game_over_window_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(gameTextureAtlas, activity, "game_over_window.png");
+		game_pause_window_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(gameTextureAtlas, activity, "game_pause_window.png");
 		
 		//BUTTONS
 		menu_button_tw_region = BitmapTextureAtlasTextureRegionFactory.createFromAsset(menuTextureAtlas, activity, "menu_button_tw.png");
@@ -174,13 +182,17 @@ public class ResourcesManager {
 	}
 
 	private void loadGameAudio() {
-		MusicFactory.setAssetBasePath("sound/game/");
-		SoundFactory.setAssetBasePath("sound/game/");
-		/*try {
-
+		SoundFactory.setAssetBasePath("audio/");
+		MusicFactory.setAssetBasePath("audio/");
+		try {
+			game_background_sound = MusicFactory.createMusicFromAsset(activity.getMusicManager(), activity, "game_background_sound.mp3");
+			game_background_sound.setLooping(false);
+			game_ball_tap = SoundFactory.createSoundFromAsset(activity.getSoundManager(), activity, "game_ball_tap.wav");
+			game_referee_whistle = SoundFactory.createSoundFromAsset(activity.getSoundManager(), activity, "game_referee_whistle.wav");
+			game_rush_whistle = SoundFactory.createSoundFromAsset(activity.getSoundManager(), activity, "game_rush_whistle.wav");
 		} catch (IOException e) {
 			e.printStackTrace();
-		}*/
+		}
 	}
 	
 	public void unloadGameAudio() {
@@ -191,10 +203,13 @@ public class ResourcesManager {
 		FontFactory.setAssetBasePath("fonts/game/");
 		final ITexture scoreTexture = new BitmapTextureAtlas(activity.getTextureManager(), 256, 256, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
 		final ITexture timerTexture = new BitmapTextureAtlas(activity.getTextureManager(), 256, 256, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
-		scoreFont = FontFactory.createStrokeFromAsset(activity.getFontManager(), scoreTexture, activity.getAssets(), "myriad.ttf", 60, true, Color.WHITE_ARGB_PACKED_INT, 2f, Color.BLACK_ARGB_PACKED_INT);
-		timerFont = FontFactory.createStrokeFromAsset(activity.getFontManager(), timerTexture, activity.getAssets(), "myriad.ttf", 60, true, Color.WHITE_ARGB_PACKED_INT, 2f, Color.BLACK_ARGB_PACKED_INT);
+		final ITexture highScoreTexture = new BitmapTextureAtlas(activity.getTextureManager(), 256, 256, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
+		scoreFont = FontFactory.createStrokeFromAsset(activity.getFontManager(), scoreTexture, activity.getAssets(), "myriad.ttf", 60, true, Color.WHITE_ARGB_PACKED_INT, 3f, Color.BLACK_ARGB_PACKED_INT);
+		timerFont = FontFactory.createStrokeFromAsset(activity.getFontManager(), timerTexture, activity.getAssets(), "myriad.ttf", 60, true, Color.WHITE_ARGB_PACKED_INT, 3f, Color.BLACK_ARGB_PACKED_INT);
+		highScoreFont = FontFactory.createStrokeFromAsset(activity.getFontManager(), highScoreTexture, activity.getAssets(), "myriad.ttf", 60, true, Color.WHITE_ARGB_PACKED_INT, 3f, Color.BLACK_ARGB_PACKED_INT);
 		scoreFont.load();
 		timerFont.load();
+		highScoreFont.load();
 	}
 	
 	private void unloadGameTextures() {
